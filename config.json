@@ -1,0 +1,11 @@
+{
+  "host": "",
+  "port": 9092,
+  "nuklaiRPC": "http://176.34.186.250:9650/ext/bc/bNTcYxZPePcxigmLeK3qiDHxEc7scrFgGfM4bKt8hp8MExhtW",
+  "recipient": "nuklai1qpg4ecapjymddcde8sfq06dshzpxltqnl47tvfz0hnkesjz7t0p35d5fnr3",
+  "feedSize": 100,
+  "minFee": 10000000,
+  "feeDelta": 10000000,
+  "messagesPerEpoch": 10,
+  "targetDurationPerEpoch": 300
+}
