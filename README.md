@@ -1,13 +1,36 @@
 # Nuklai Feed
 
-## Build
+## Build & Run from Source
 
-```bash
-./scripts/build.sh
-```
+- Build
 
-## Run
+  ```bash
+  ./scripts/build.sh
+  ```
 
-```bash
-./build/nuklai-feed ./config.json
-```
+- Run
+
+  ```bash
+  ./build/nuklai-feed ./config.json
+  ```
+
+## Build & Run with Docker
+
+- Build
+
+  ```bash
+  docker build -t nuklai-feed .
+  ```
+
+- Run
+
+  ```bash
+  docker container rm -f nuklai-feed;
+  docker run -d -p 10592:10592 --name nuklai-feed nuklai-feed;
+  ```
+
+- Read the logs
+
+  ```bash
+  docker container logs -f nuklai-feed
+  ```

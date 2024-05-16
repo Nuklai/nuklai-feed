@@ -52,7 +52,8 @@ func (j *JSONRPCServer) Feed(req *http.Request, args *FeedArgs, reply *FeedReply
 	return nil
 }
 
-type UpdateNuklaiRPCArgs struct {
+// TODO: Make this an admin-only endpoint
+/* type UpdateNuklaiRPCArgs struct {
 	NuklaiRPCUrl string `json:"nuklaiRPCUrl"`
 }
 
@@ -67,4 +68,4 @@ func (j *JSONRPCServer) UpdateNuklaiRPC(req *http.Request, args *UpdateNuklaiRPC
 	}
 	reply.Success = true
 	return nil
-}
+} */

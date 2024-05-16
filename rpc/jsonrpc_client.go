@@ -54,8 +54,9 @@ func (cli *JSONRPCClient) Feed(ctx context.Context, subnetID, chainID string) ([
 	return resp.Feed, err
 }
 
+// TODO: Make this an admin-only endpoint
 // UpdateNuklaiRPC updates the RPC url for Nuklai
-func (cli *JSONRPCClient) UpdateNuklaiRPC(ctx context.Context, newNuklaiRPCUrl string) (bool, error) {
+/* func (cli *JSONRPCClient) UpdateNuklaiRPC(ctx context.Context, newNuklaiRPCUrl string) (bool, error) {
 	resp := new(UpdateNuklaiRPCReply)
 	err := cli.requester.SendRequest(
 		ctx,
@@ -67,4 +68,4 @@ func (cli *JSONRPCClient) UpdateNuklaiRPC(ctx context.Context, newNuklaiRPCUrl s
 	)
 
 	return resp.Success, err
-}
+} */

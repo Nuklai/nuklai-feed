@@ -25,6 +25,11 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+const (
+	feedBucket = "feedBucket"
+	maxFeeds   = 100
+)
+
 type FeedContent struct {
 	Message string `json:"message"`
 	URL     string `json:"url"`
