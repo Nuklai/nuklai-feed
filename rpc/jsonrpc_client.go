@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/ava-labs/hypersdk/requester"
-	"github.com/nuklai/nuklaivm/cmd/nuklai-feed/manager"
+	"github.com/nuklai/nuklai-feed/manager"
 )
 
 const (

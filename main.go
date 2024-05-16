@@ -16,9 +16,9 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/hypersdk/server"
 	"github.com/ava-labs/hypersdk/utils"
-	"github.com/nuklai/nuklaivm/cmd/nuklai-feed/config"
-	"github.com/nuklai/nuklaivm/cmd/nuklai-feed/manager"
-	frpc "github.com/nuklai/nuklaivm/cmd/nuklai-feed/rpc"
+	"github.com/nuklai/nuklai-feed/config"
+	"github.com/nuklai/nuklai-feed/manager"
+	frpc "github.com/nuklai/nuklai-feed/rpc"
 	"go.uber.org/zap"
 )
 

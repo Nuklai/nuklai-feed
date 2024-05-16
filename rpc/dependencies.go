@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/ava-labs/hypersdk/codec"
-	"github.com/nuklai/nuklaivm/cmd/nuklai-feed/manager"
+	"github.com/nuklai/nuklai-feed/manager"
 )
 
 type Manager interface {
