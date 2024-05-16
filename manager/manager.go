@@ -21,13 +21,8 @@ import (
 	"github.com/nuklai/nuklaivm/cmd/nuklai-feed/config"
 	nconsts "github.com/nuklai/nuklaivm/consts"
 	nrpc "github.com/nuklai/nuklaivm/rpc"
+	"go.etcd.io/bbolt"
 	"go.uber.org/zap"
-	"golang.org/x/exp/slices"
-)
-
-const (
-	feedBucket = "feedBucket"
-	maxFeeds   = 100
 )
 
 type FeedContent struct {
@@ -60,10 +55,10 @@ type Manager struct {
 	epochMessages int
 	feeAmount     uint64
 
-	f sync.RWMutex
-	// TODO: persist this
 	feed       []*FeedObject
 	cancelFunc context.CancelFunc
+
+	db *bbolt.DB
 }
 
 func New(logger logging.Logger, config *config.Config) (*Manager, error) {
@@ -86,6 +81,12 @@ func New(logger logging.Logger, config *config.Config) (*Manager, error) {
 		zap.String("address", m.config.Recipient),
 		zap.String("fee", utils.FormatBalance(m.feeAmount, nconsts.Decimals)),
 	)
+
+	if err := m.initDB(); err != nil {
+		cancel()
+		return nil, err
+	}
+
 	return m, nil
 }
 
@@ -189,9 +190,7 @@ func (m *Manager) Run(ctx context.Context) error {
 				continue
 			}
 
-			m.l.Lock()
-			m.f.Lock()
-			m.feed = append([]*FeedObject{{
+			m.appendFeed(&FeedObject{
 				SubnetID:  m.subnetID.String(),
 				ChainID:   m.chainID.String(),
 				Address:   fromStr,
@@ -199,13 +198,7 @@ func (m *Manager) Run(ctx context.Context) error {
 				Timestamp: blk.Tmstmp,
 				Fee:       action.Value,
 				Content:   &content,
-			}}, m.feed...)
-			if len(m.feed) > m.config.FeedSize {
-				m.feed = m.feed[:m.config.FeedSize]
-			}
-			m.log.Info("Received incoming message", zap.String("from", fromStr), zap.String("memo", string(action.Memo)), zap.Uint64("payment", action.Value))
-			m.f.Unlock()
-			m.l.Unlock()
+			})
 		}
 
 		time.Sleep(1 * time.Second)
@@ -224,18 +217,8 @@ func (m *Manager) GetFeedInfo(_ context.Context) (codec.Address, uint64, error) 
 }
 
 // GetFeed returns a copy of the current feed
-func (m *Manager) GetFeed(_ context.Context, subnetID, chainID string) ([]*FeedObject, error) {
-	m.f.RLock()
-	defer m.f.RUnlock()
-
-	var filteredFeed []*FeedObject
-	for _, item := range m.feed {
-		if item.SubnetID == subnetID && item.ChainID == chainID {
-			filteredFeed = append(filteredFeed, item)
-		}
-	}
-
-	return slices.Clone(filteredFeed), nil
+func (m *Manager) GetFeed(_ context.Context, subnetID, chainID string, limit int) ([]*FeedObject, error) {
+	return m.getLastFeeds(limit)
 }
 
 // UpdateNuklaiRPC updates the RPC URL and reconnects clients

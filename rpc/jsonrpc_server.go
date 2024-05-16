@@ -37,6 +37,7 @@ func (j *JSONRPCServer) FeedInfo(req *http.Request, _ *struct{}, reply *FeedInfo
 type FeedArgs struct {
 	SubnetID string `json:"subnetID"`
 	ChainID  string `json:"chainID"`
+	Limit    int    `json:"limit"`
 }
 
 type FeedReply struct {
@@ -44,7 +45,7 @@ type FeedReply struct {
 }
 
 func (j *JSONRPCServer) Feed(req *http.Request, args *FeedArgs, reply *FeedReply) (err error) {
-	feed, err := j.m.GetFeed(req.Context(), args.SubnetID, args.ChainID)
+	feed, err := j.m.GetFeed(req.Context(), args.SubnetID, args.ChainID, args.Limit)
 	if err != nil {
 		return err
 	}
