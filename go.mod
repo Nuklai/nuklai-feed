@@ -2,13 +2,14 @@ module github.com/nuklai/nuklai-feed
 
 go 1.21
 
-toolchain go1.21.5
+toolchain go1.21.9
 
 require (
 	github.com/ava-labs/avalanchego v1.10.18
 	github.com/ava-labs/hypersdk v0.0.16
 	github.com/joho/godotenv v1.5.1
 	github.com/nuklai/nuklaivm v0.0.0-20240515164422-45dab75a00c9
+	go.etcd.io/bbolt v1.3.10
 	go.uber.org/zap v1.26.0
 )
 
@@ -44,7 +45,6 @@ require (
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/supranational/blst v0.3.11 // indirect
-	go.etcd.io/bbolt v1.3.10 // indirect
 	go.opentelemetry.io/otel v1.11.2 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.11.2 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.11.2 // indirect
