@@ -26,7 +26,7 @@
 
   ```bash
   docker container rm -f nuklai-feed;
-  docker run -d -p 10592:10592 --name nuklai-feed nuklai-feed;
+  docker run -d -p 10592:10592 -v ./config.json:/app/config.json --name nuklai-feed nuklai-feed;
   ```
 
 - Read the logs
