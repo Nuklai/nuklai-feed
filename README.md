@@ -48,12 +48,11 @@
 - Run
 
   ```bash
-  docker container rm -f nuklai-feed;
-  docker run --env-file .env -d -p 10592:10592 --name nuklai-feed nuklai-feed
+  ./scripts/run_docker.sh
   ```
 
-- Read the logs
+- Stop the docker container
 
   ```bash
-  docker container logs -f nuklai-feed
+  docker container stop nuklai-feed
   ```

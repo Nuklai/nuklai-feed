@@ -14,4 +14,4 @@ RUN go build -o feed
 EXPOSE 10592
 
 # Command to run the application
-CMD ["./feed",  "./config.json"]
+CMD ["./feed"]
