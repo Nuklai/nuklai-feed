@@ -1,11 +1,7 @@
-// Copyright (C) 2024, AllianceBlock. All rights reserved.
-// See the file LICENSE for licensing terms.
-
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -16,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/hypersdk/server"
 	"github.com/ava-labs/hypersdk/utils"
+	"github.com/joho/godotenv"
 	"github.com/nuklai/nuklai-feed/config"
 	"github.com/nuklai/nuklai-feed/manager"
 	frpc "github.com/nuklai/nuklai-feed/rpc"
@@ -40,6 +37,12 @@ func fatal(l logging.Logger, msg string, fields ...zap.Field) {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		utils.Outf("{{red}}Error loading .env file{{/}}: %v\n", err)
+		os.Exit(1)
+	}
+
 	logFactory := logging.NewFactory(logging.Config{
 		DisplayLevel: logging.Info,
 	})
@@ -50,28 +53,20 @@ func main() {
 	}
 	log := l
 
-	// Load config
-	if len(os.Args) != 2 {
-		fatal(log, "no config file specified")
-	}
-	configPath := os.Args[1]
-	rawConfig, err := os.ReadFile(configPath)
+	// Load config from environment variables
+	config, err := config.LoadConfigFromEnv()
 	if err != nil {
-		fatal(log, "cannot open config file", zap.String("path", configPath), zap.Error(err))
-	}
-	var c config.Config
-	if err := json.Unmarshal(rawConfig, &c); err != nil {
-		fatal(log, "cannot read config file", zap.Error(err))
+		fatal(log, "cannot load config from environment variables", zap.Error(err))
 	}
 
 	// Load recipient
-	if _, err := c.RecipientAddress(); err != nil {
+	if _, err := config.RecipientAddress(); err != nil {
 		fatal(log, "cannot parse recipient address", zap.Error(err))
 	}
-	log.Info("loaded feed recipient", zap.String("address", c.Recipient))
+	log.Info("loaded feed recipient", zap.String("address", config.Recipient))
 
 	// Create server
-	listenAddress := net.JoinHostPort(c.HTTPHost, fmt.Sprintf("%d", c.HTTPPort))
+	listenAddress := net.JoinHostPort(config.HTTPHost, fmt.Sprintf("%d", config.HTTPPort))
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		fatal(log, "cannot create listener", zap.Error(err))
@@ -82,7 +77,7 @@ func main() {
 	}
 
 	// Start manager with context handling
-	manager, err := manager.New(log, &c)
+	manager, err := manager.New(log, config)
 	if err != nil {
 		fatal(log, "cannot create manager", zap.Error(err))
 	}
@@ -101,7 +96,7 @@ func main() {
 		fatal(log, "cannot create handler", zap.Error(err))
 	}
 	if err := srv.AddRoute(handler, "feed", ""); err != nil {
-		fatal(log, "cannot add facuet route", zap.Error(err))
+		fatal(log, "cannot add feed route", zap.Error(err))
 	}
 
 	// Start server

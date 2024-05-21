@@ -1,27 +1,29 @@
-// Copyright (C) 2024, AllianceBlock. All rights reserved.
-// See the file LICENSE for licensing terms.
-
 package config
 
 import (
+	"os"
+	"strconv"
+
 	"github.com/ava-labs/hypersdk/codec"
 	"github.com/nuklai/nuklaivm/consts"
 )
 
 type Config struct {
-	HTTPHost string `json:"host"`
-	HTTPPort int    `json:"port"`
+	HTTPHost string
+	HTTPPort int
 
-	NuklaiRPC string `json:"nuklaiRPC"`
+	NuklaiRPC string
 
-	Recipient     string `json:"recipient"`
+	Recipient     string
 	recipientAddr codec.Address
 
-	FeedSize               int    `json:"feedSize"`
-	MinFee                 uint64 `json:"minFee"`
-	FeeDelta               uint64 `json:"feeDelta"`
-	MessagesPerEpoch       int    `json:"messagesPerEpoch"`
-	TargetDurationPerEpoch int64  `json:"targetDurationPerEpoch"` // seconds
+	FeedSize               int
+	MinFee                 uint64
+	FeeDelta               uint64
+	MessagesPerEpoch       int
+	TargetDurationPerEpoch int64 // seconds
+
+	AdminToken string
 }
 
 func (c *Config) RecipientAddress() (codec.Address, error) {
@@ -33,4 +35,59 @@ func (c *Config) RecipientAddress() (codec.Address, error) {
 		c.recipientAddr = addr
 	}
 	return addr, err
+}
+
+func GetEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
+}
+
+func LoadConfigFromEnv() (*Config, error) {
+	port, err := strconv.Atoi(GetEnv("PORT", "10592"))
+	if err != nil {
+		return nil, err
+	}
+
+	feedSize, err := strconv.Atoi(GetEnv("FEED_SIZE", "100"))
+	if err != nil {
+		return nil, err
+	}
+
+	minFee, err := strconv.ParseUint(GetEnv("MIN_FEE", "1000000"), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	feeDelta, err := strconv.ParseUint(GetEnv("FEE_DELTA", "100000"), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	messagesPerEpoch, err := strconv.Atoi(GetEnv("MESSAGES_PER_EPOCH", "100"))
+	if err != nil {
+		return nil, err
+	}
+
+	targetDurationPerEpoch, err := strconv.ParseInt(GetEnv("TARGET_DURATION_PER_EPOCH", "300"), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Config{
+		HTTPHost: GetEnv("HOST", ""),
+		HTTPPort: port,
+
+		NuklaiRPC: os.Getenv("NUKLAI_RPC"),
+
+		Recipient:              GetEnv("RECIPIENT", "nuklai1qpg4ecapjymddcde8sfq06dshzpxltqnl47tvfz0hnkesjz7t0p35d5fnr3"),
+		FeedSize:               feedSize,
+		MinFee:                 minFee,
+		FeeDelta:               feeDelta,
+		MessagesPerEpoch:       messagesPerEpoch,
+		TargetDurationPerEpoch: targetDurationPerEpoch,
+
+		AdminToken: GetEnv("ADMIN_TOKEN", "ADMIN_TOKEN"),
+	}, nil
 }

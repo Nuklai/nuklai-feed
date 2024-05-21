@@ -23,4 +23,5 @@ go.work
 # Custom
 build/
 .nuklai-feed
-config.json.prod
+.env
+.env.production

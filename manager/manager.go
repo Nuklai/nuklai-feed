@@ -1,12 +1,11 @@
-// Copyright (C) 2024, AllianceBlock. All rights reserved.
-// See the file LICENSE for licensing terms.
-
 package manager
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -17,11 +16,11 @@ import (
 	"github.com/ava-labs/hypersdk/pubsub"
 	"github.com/ava-labs/hypersdk/rpc"
 	"github.com/ava-labs/hypersdk/utils"
-	"github.com/nuklai/nuklai-feed/config"
+	fconfig "github.com/nuklai/nuklai-feed/config"
+	"github.com/nuklai/nuklai-feed/database"
 	"github.com/nuklai/nuklaivm/actions"
 	nconsts "github.com/nuklai/nuklaivm/consts"
 	nrpc "github.com/nuklai/nuklaivm/rpc"
-	"go.etcd.io/bbolt"
 	"go.uber.org/zap"
 )
 
@@ -43,7 +42,7 @@ type FeedObject struct {
 
 type Manager struct {
 	log    logging.Logger
-	config *config.Config
+	config *fconfig.Config
 
 	ncli     *nrpc.JSONRPCClient
 	subnetID ids.ID
@@ -58,10 +57,10 @@ type Manager struct {
 	feed       []*FeedObject
 	cancelFunc context.CancelFunc
 
-	db *bbolt.DB
+	db *database.DB
 }
 
-func New(logger logging.Logger, config *config.Config) (*Manager, error) {
+func New(logger logging.Logger, config *fconfig.Config) (*Manager, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cli := rpc.NewJSONRPCClient(config.NuklaiRPC)
 	networkID, subnetID, chainID, err := cli.Network(ctx)
@@ -70,7 +69,24 @@ func New(logger logging.Logger, config *config.Config) (*Manager, error) {
 		return nil, err
 	}
 	ncli := nrpc.NewJSONRPCClient(config.NuklaiRPC, networkID, chainID)
-	m := &Manager{log: logger, config: config, ncli: ncli, subnetID: subnetID, chainID: chainID, feed: []*FeedObject{}, cancelFunc: cancel}
+
+	// Set default values to the current directory
+	defaultDir, err := os.Getwd()
+	if err != nil {
+		panic("Failed to get current working directory: " + err.Error())
+	}
+	databaseFolder := fconfig.GetEnv("NUKLAI_FEED_DB_PATH", filepath.Join(defaultDir, ".nuklai-feed/db"))
+	if err := os.MkdirAll(databaseFolder, os.ModePerm); err != nil {
+		panic("failed to create database directory: " + err.Error())
+	}
+	dbPath := filepath.Join(databaseFolder, "feeds.db")
+
+	db, err := database.NewDB(dbPath)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	m := &Manager{log: logger, config: config, ncli: ncli, subnetID: subnetID, chainID: chainID, feed: []*FeedObject{}, cancelFunc: cancel, db: db}
 	m.epochStart = time.Now().Unix()
 	m.feeAmount = m.config.MinFee
 	m.t = timer.NewTimer(m.updateFee)
@@ -82,27 +98,68 @@ func New(logger logging.Logger, config *config.Config) (*Manager, error) {
 		zap.String("fee", utils.FormatBalance(m.feeAmount, nconsts.Decimals)),
 	)
 
-	if err := m.initDB(); err != nil {
-		cancel()
-		return nil, err
-	}
-
 	return m, nil
 }
 
-// updateFee adjusts the fee based on the message frequency during an epoch
+func (m *Manager) saveFeed(feed *FeedObject) error {
+	content, err := json.Marshal(feed.Content)
+	if err != nil {
+		return fmt.Errorf("failed to marshal feed content: %w", err)
+	}
+	return m.db.SaveFeed(&database.FeedObject{
+		TxID:      feed.TxID.String(),
+		SubnetID:  feed.SubnetID,
+		ChainID:   feed.ChainID,
+		Address:   feed.Address,
+		Timestamp: feed.Timestamp,
+		Fee:       feed.Fee,
+		Content:   string(content),
+	})
+}
+
+func (m *Manager) getLastFeeds(n int) ([]*FeedObject, error) {
+	feeds, err := m.db.GetLastFeeds(n)
+	if err != nil {
+		return nil, err
+	}
+	var feedObjects []*FeedObject
+	for _, feed := range feeds {
+		var content FeedContent
+		if err := json.Unmarshal([]byte(feed.Content), &content); err != nil {
+			return nil, err
+		}
+		txID, err := ids.FromString(feed.TxID)
+		if err != nil {
+			return nil, err
+		}
+		feedObjects = append(feedObjects, &FeedObject{
+			SubnetID:  feed.SubnetID,
+			ChainID:   feed.ChainID,
+			Address:   feed.Address,
+			TxID:      txID,
+			Timestamp: feed.Timestamp,
+			Fee:       feed.Fee,
+			Content:   &content,
+		})
+	}
+	return feedObjects, nil
+}
+
+func (m *Manager) appendFeed(feed *FeedObject) {
+	if err := m.saveFeed(feed); err != nil {
+		m.log.Error("Failed to save feed", zap.Error(err))
+	}
+}
+
 func (m *Manager) updateFee() {
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	// If time since [epochStart] is within half of the target duration,
-	// we attempted to update fee when we just reset during block processing.
 	now := time.Now().Unix()
 	if now-m.epochStart < m.config.TargetDurationPerEpoch/2 {
 		return
 	}
 
-	// Decrease fee if there are no messages in this epoch
 	if m.feeAmount > m.config.MinFee && m.epochMessages == 0 {
 		m.feeAmount -= m.config.FeeDelta
 		m.log.Info("decreasing message fee", zap.Uint64("fee", m.feeAmount))
@@ -113,7 +170,6 @@ func (m *Manager) updateFee() {
 }
 
 func (m *Manager) Run(ctx context.Context) error {
-	// Start update timer
 	m.t.SetTimeoutIn(time.Duration(m.config.TargetDurationPerEpoch) * time.Second)
 	go m.t.Dispatch()
 	defer m.t.Stop()
@@ -166,7 +222,6 @@ func (m *Manager) Run(ctx context.Context) error {
 			continue
 		}
 
-		// Look for transactions to recipient
 		for i, tx := range blk.Txs {
 			action, ok := tx.Action.(*actions.Transfer)
 			recipientAddr, err := m.config.RecipientAddress()
@@ -207,7 +262,6 @@ func (m *Manager) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// GetFeedInfo provides details about the feed and the current fee
 func (m *Manager) GetFeedInfo(_ context.Context) (codec.Address, uint64, error) {
 	m.l.RLock()
 	defer m.l.RUnlock()
@@ -216,32 +270,26 @@ func (m *Manager) GetFeedInfo(_ context.Context) (codec.Address, uint64, error) 
 	return addr, m.feeAmount, err
 }
 
-// GetFeed returns a copy of the current feed
 func (m *Manager) GetFeed(_ context.Context, subnetID, chainID string, limit int) ([]*FeedObject, error) {
 	return m.getLastFeeds(limit)
 }
 
-// UpdateNuklaiRPC updates the RPC URL and reconnects clients
 func (m *Manager) UpdateNuklaiRPC(ctx context.Context, newNuklaiRPCUrl string) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	m.log.Info("Updating Nuklai RPC URL", zap.String("oldURL", m.config.NuklaiRPC), zap.String("newURL", newNuklaiRPCUrl))
 
-	// Updating the configuration
 	m.config.NuklaiRPC = newNuklaiRPCUrl
 
-	// Re-initialize RPC clients
 	cli := rpc.NewJSONRPCClient(newNuklaiRPCUrl)
 	networkID, subnetID, chainID, err := cli.Network(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch network details: %w", err)
 	}
 
-	// Reassign the newly created clients
 	m.ncli = nrpc.NewJSONRPCClient(newNuklaiRPCUrl, networkID, chainID)
 
-	// Reinitialize dependent properties
 	m.subnetID = subnetID
 	m.chainID = chainID
 	m.epochStart = time.Now().Unix()
@@ -258,4 +306,9 @@ func (m *Manager) UpdateNuklaiRPC(ctx context.Context, newNuklaiRPCUrl string) e
 	)
 
 	return nil
+}
+
+// Config returns the configuration of the manager
+func (m *Manager) Config() *fconfig.Config {
+	return m.config
 }

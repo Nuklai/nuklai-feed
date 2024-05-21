@@ -1,6 +1,3 @@
-// Copyright (C) 2024, AllianceBlock. All rights reserved.
-// See the file LICENSE for licensing terms.
-
 package rpc
 
 import (
@@ -55,18 +52,17 @@ func (cli *JSONRPCClient) Feed(ctx context.Context, subnetID, chainID string, li
 	return resp.Feed, err
 }
 
-// TODO: Make this an admin-only endpoint
 // UpdateNuklaiRPC updates the RPC url for Nuklai
-/* func (cli *JSONRPCClient) UpdateNuklaiRPC(ctx context.Context, newNuklaiRPCUrl string) (bool, error) {
+func (cli *JSONRPCClient) UpdateNuklaiRPC(ctx context.Context, newNuklaiRPCUrl, adminToken string) (bool, error) {
 	resp := new(UpdateNuklaiRPCReply)
 	err := cli.requester.SendRequest(
 		ctx,
 		"updateNuklaiRPC",
 		&UpdateNuklaiRPCArgs{
 			NuklaiRPCUrl: newNuklaiRPCUrl,
+			AdminToken:   adminToken,
 		},
 		resp,
 	)
-
 	return resp.Success, err
-} */
+}
