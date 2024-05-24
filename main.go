@@ -37,11 +37,12 @@ func fatal(l logging.Logger, msg string, fields ...zap.Field) {
 }
 
 func main() {
-	err := godotenv.Load()
+	err := godotenv.Overload() // Overload the environment variables with those from the .env file
 	if err != nil {
 		utils.Outf("{{red}}Error loading .env file{{/}}: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println("Loaded environment variables from .env file")
 
 	logFactory := logging.NewFactory(logging.Config{
 		DisplayLevel: logging.Info,
@@ -52,18 +53,20 @@ func main() {
 		os.Exit(1)
 	}
 	log := l
+	log.Info("Logger initialized")
 
 	// Load config from environment variables
 	config, err := config.LoadConfigFromEnv()
 	if err != nil {
 		fatal(log, "cannot load config from environment variables", zap.Error(err))
 	}
+	log.Info("Config loaded from environment variables")
 
 	// Load recipient
 	if _, err := config.RecipientAddress(); err != nil {
 		fatal(log, "cannot parse recipient address", zap.Error(err))
 	}
-	log.Info("loaded feed recipient", zap.String("address", config.Recipient))
+	log.Info("Loaded feed recipient", zap.String("address", config.Recipient))
 
 	// Create server
 	listenAddress := net.JoinHostPort(config.HTTPHost, fmt.Sprintf("%d", config.HTTPPort))
@@ -71,21 +74,25 @@ func main() {
 	if err != nil {
 		fatal(log, "cannot create listener", zap.Error(err))
 	}
+	log.Info("Created listener", zap.String("address", listenAddress))
 	srv, err := server.New("", log, listener, httpConfig, allowedOrigins, allowedHosts, shutdownTimeout)
 	if err != nil {
 		fatal(log, "cannot create server", zap.Error(err))
 	}
+	log.Info("Server created")
 
 	// Start manager with context handling
 	manager, err := manager.New(log, config)
 	if err != nil {
 		fatal(log, "cannot create manager", zap.Error(err))
 	}
+	log.Info("Manager created")
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
+		log.Info("Starting manager")
 		if err := manager.Run(ctx); err != nil {
-			log.Error("manager error", zap.Error(err))
+			log.Error("Manager error", zap.Error(err))
 		}
 	}()
 
@@ -98,15 +105,17 @@ func main() {
 	if err := srv.AddRoute(handler, "feed", ""); err != nil {
 		fatal(log, "cannot add feed route", zap.Error(err))
 	}
+	log.Info("Feed handler added")
 
 	// Start server
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigs
-		log.Info("triggering server shutdown", zap.Any("signal", sig))
+		log.Info("Triggering server shutdown", zap.Any("signal", sig))
 		cancel() // Ensure context cancellation cascades down
 		_ = srv.Shutdown()
 	}()
-	log.Info("server exited", zap.Error(srv.Dispatch()))
+	log.Info("Server starting")
+	log.Info("Server exited", zap.Error(srv.Dispatch()))
 }

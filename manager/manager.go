@@ -104,9 +104,10 @@ func New(logger logging.Logger, config *fconfig.Config) (*Manager, error) {
 func (m *Manager) saveFeed(feed *FeedObject) error {
 	content, err := json.Marshal(feed.Content)
 	if err != nil {
+		m.log.Error("Failed to marshal feed content", zap.Error(err))
 		return fmt.Errorf("failed to marshal feed content: %w", err)
 	}
-	return m.db.SaveFeed(&database.FeedObject{
+	err = m.db.SaveFeed(&database.FeedObject{
 		TxID:      feed.TxID.String(),
 		SubnetID:  feed.SubnetID,
 		ChainID:   feed.ChainID,
@@ -115,21 +116,28 @@ func (m *Manager) saveFeed(feed *FeedObject) error {
 		Fee:       feed.Fee,
 		Content:   string(content),
 	})
+	if err != nil {
+		m.log.Error("Failed to save feed to database", zap.Error(err))
+	}
+	return err
 }
 
 func (m *Manager) getLastFeeds(n int) ([]*FeedObject, error) {
 	feeds, err := m.db.GetLastFeeds(n)
 	if err != nil {
+		m.log.Error("Failed to get last feeds from database", zap.Error(err))
 		return nil, err
 	}
 	var feedObjects []*FeedObject
 	for _, feed := range feeds {
 		var content FeedContent
 		if err := json.Unmarshal([]byte(feed.Content), &content); err != nil {
+			m.log.Error("Failed to unmarshal feed content", zap.Error(err))
 			return nil, err
 		}
 		txID, err := ids.FromString(feed.TxID)
 		if err != nil {
+			m.log.Error("Failed to parse TxID from string", zap.Error(err))
 			return nil, err
 		}
 		feedObjects = append(feedObjects, &FeedObject{
@@ -146,6 +154,7 @@ func (m *Manager) getLastFeeds(n int) ([]*FeedObject, error) {
 }
 
 func (m *Manager) appendFeed(feed *FeedObject) {
+	m.log.Info("Appending new feed", zap.String("TxID", feed.TxID.String()))
 	if err := m.saveFeed(feed); err != nil {
 		m.log.Error("Failed to save feed", zap.Error(err))
 	}
@@ -162,14 +171,16 @@ func (m *Manager) updateFee() {
 
 	if m.feeAmount > m.config.MinFee && m.epochMessages == 0 {
 		m.feeAmount -= m.config.FeeDelta
-		m.log.Info("decreasing message fee", zap.Uint64("fee", m.feeAmount))
+		m.log.Info("Decreasing message fee", zap.Uint64("fee", m.feeAmount))
 	}
 	m.epochMessages = 0
 	m.epochStart = time.Now().Unix()
 	m.t.SetTimeoutIn(time.Duration(m.config.TargetDurationPerEpoch) * time.Second)
+	m.log.Info("Fee updated", zap.Int64("epochStart", m.epochStart), zap.Uint64("feeAmount", m.feeAmount))
 }
 
 func (m *Manager) Run(ctx context.Context) error {
+	m.log.Info("Manager run started")
 	m.t.SetTimeoutIn(time.Duration(m.config.TargetDurationPerEpoch) * time.Second)
 	go m.t.Dispatch()
 	defer m.t.Stop()
@@ -188,9 +199,10 @@ func (m *Manager) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to connect to RPC: %w", err)
 		}
 		if err = scli.RegisterBlocks(); err != nil {
-			m.log.Warn("failed to register for blocks", zap.String("uri", m.config.NuklaiRPC), zap.Error(err))
+			m.log.Warn("Failed to register for blocks", zap.String("uri", m.config.NuklaiRPC), zap.Error(err))
 			return fmt.Errorf("failed to register for blocks: %w", err)
 		}
+		m.log.Info("Connected to RPC and registered for blocks", zap.String("uri", m.config.NuklaiRPC))
 		return nil
 	}
 
@@ -226,6 +238,7 @@ func (m *Manager) Run(ctx context.Context) error {
 			action, ok := tx.Action.(*actions.Transfer)
 			recipientAddr, err := m.config.RecipientAddress()
 			if err != nil {
+				m.log.Error("Failed to get recipient address", zap.Error(err))
 				return err
 			}
 			if !ok || action.To != recipientAddr {
@@ -259,6 +272,7 @@ func (m *Manager) Run(ctx context.Context) error {
 		time.Sleep(1 * time.Second)
 	}
 
+	m.log.Info("Manager run completed", zap.Error(ctx.Err()))
 	return ctx.Err()
 }
 
@@ -267,6 +281,9 @@ func (m *Manager) GetFeedInfo(_ context.Context) (codec.Address, uint64, error) 
 	defer m.l.RUnlock()
 
 	addr, err := m.config.RecipientAddress()
+	if err != nil {
+		m.log.Error("Failed to get recipient address", zap.Error(err))
+	}
 	return addr, m.feeAmount, err
 }
 
@@ -285,6 +302,7 @@ func (m *Manager) UpdateNuklaiRPC(ctx context.Context, newNuklaiRPCUrl string) e
 	cli := rpc.NewJSONRPCClient(newNuklaiRPCUrl)
 	networkID, subnetID, chainID, err := cli.Network(ctx)
 	if err != nil {
+		m.log.Error("Failed to fetch network details", zap.Error(err))
 		return fmt.Errorf("failed to fetch network details: %w", err)
 	}
 
