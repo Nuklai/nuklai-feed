@@ -1,4 +1,4 @@
-name: Faucet deployment
+name: Feed deployment
 
 on:
   push:
@@ -13,8 +13,8 @@ permissions:
 env:
   PRODUCT: nuklaivm
   COMPONENT: backend
-  APPLICATION: faucet
-  API_PORT: 10591
+  APPLICATION: feed
+  API_PORT: 10592
   AWS_REGION: eu-west-1
   BUILD_FOLDER: build
 

@@ -10,6 +10,10 @@ COPY . .
 # Build the Go application
 RUN go build -o feed
 
+# Create .env file
+RUN chmod +x ./infra/scripts/startup.sh
+ENTRYPOINT [ "./infra/scripts/startup.sh" ]
+
 # Expose the application port
 EXPOSE 10592
 
