@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,6 +35,12 @@ var (
 func fatal(l logging.Logger, msg string, fields ...zap.Field) {
 	l.Fatal(msg, fields...)
 	os.Exit(1)
+}
+
+// HealthHandler responds with a simple health check status
+func HealthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
 func main() {
@@ -75,11 +82,19 @@ func main() {
 		fatal(log, "cannot create listener", zap.Error(err))
 	}
 	log.Info("Created listener", zap.String("address", listenAddress))
-	srv, err := server.New("", log, listener, httpConfig, allowedOrigins, allowedHosts, shutdownTimeout)
-	if err != nil {
-		fatal(log, "cannot create server", zap.Error(err))
+
+	mux := http.NewServeMux()
+	srv := &http.Server{
+		Addr:         listenAddress,
+		Handler:      mux,
+		ReadTimeout:  httpConfig.ReadTimeout,
+		WriteTimeout: httpConfig.WriteTimeout,
+		IdleTimeout:  httpConfig.IdleTimeout,
 	}
-	log.Info("Server created")
+
+	// Add health check handler
+	mux.HandleFunc("/health", HealthHandler)
+	log.Info("Health handler added")
 
 	// Start manager with context handling
 	manager, err := manager.New(log, config)
@@ -102,9 +117,7 @@ func main() {
 	if err != nil {
 		fatal(log, "cannot create handler", zap.Error(err))
 	}
-	if err := srv.AddRoute(handler, "feed", ""); err != nil {
-		fatal(log, "cannot add feed route", zap.Error(err))
-	}
+	mux.Handle("/feed", handler)
 	log.Info("Feed handler added")
 
 	// Start server
@@ -114,8 +127,12 @@ func main() {
 		sig := <-sigs
 		log.Info("Triggering server shutdown", zap.Any("signal", sig))
 		cancel() // Ensure context cancellation cascades down
-		_ = srv.Shutdown()
+		_ = srv.Shutdown(ctx)
 	}()
 	log.Info("Server starting")
-	log.Info("Server exited", zap.Error(srv.Dispatch()))
+
+	if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
+		log.Fatal("Server failed", zap.Error(err))
+	}
+	log.Info("Server exited")
 }
