@@ -21,10 +21,7 @@ import (
 )
 
 var (
-	allowedOrigins  = []string{"*"}
-	allowedHosts    = []string{"*"}
-	shutdownTimeout = 30 * time.Second
-	httpConfig      = server.HTTPConfig{
+	httpConfig = server.HTTPConfig{
 		ReadTimeout:       60 * time.Second,
 		ReadHeaderTimeout: 60 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -117,7 +114,7 @@ func main() {
 	if err != nil {
 		fatal(log, "cannot create handler", zap.Error(err))
 	}
-	mux.Handle("/feed", handler)
+	mux.Handle("/", handler)
 	log.Info("Feed handler added")
 
 	// Start server
