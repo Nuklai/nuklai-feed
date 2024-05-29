@@ -2,10 +2,9 @@ package manager
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -60,7 +59,7 @@ type Manager struct {
 	db *database.DB
 }
 
-func New(logger logging.Logger, config *fconfig.Config) (*Manager, error) {
+func New(logger logging.Logger, config *fconfig.Config, db *sql.DB) (*Manager, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cli := rpc.NewJSONRPCClient(config.NuklaiRPC)
 	networkID, subnetID, chainID, err := cli.Network(ctx)
@@ -70,23 +69,12 @@ func New(logger logging.Logger, config *fconfig.Config) (*Manager, error) {
 	}
 	ncli := nrpc.NewJSONRPCClient(config.NuklaiRPC, networkID, chainID)
 
-	// Set default values to the current directory
-	defaultDir, err := os.Getwd()
-	if err != nil {
-		panic("Failed to get current working directory: " + err.Error())
-	}
-	databaseFolder := fconfig.GetEnv("NUKLAI_FEED_DB_PATH", filepath.Join(defaultDir, ".nuklai-feed/db"))
-	if err := os.MkdirAll(databaseFolder, os.ModePerm); err != nil {
-		panic("failed to create database directory: " + err.Error())
-	}
-	dbPath := filepath.Join(databaseFolder, "feeds.db")
-
-	db, err := database.NewDB(dbPath)
+	dbInstance, err := database.NewDB(db)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	m := &Manager{log: logger, config: config, ncli: ncli, subnetID: subnetID, chainID: chainID, feed: []*FeedObject{}, cancelFunc: cancel, db: db}
+	m := &Manager{log: logger, config: config, ncli: ncli, subnetID: subnetID, chainID: chainID, feed: []*FeedObject{}, cancelFunc: cancel, db: dbInstance}
 	m.epochStart = time.Now().Unix()
 	m.feeAmount = m.config.MinFee
 	m.t = timer.NewTimer(m.updateFee)

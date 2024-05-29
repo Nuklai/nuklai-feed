@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
 type DB struct {
@@ -21,36 +21,31 @@ type FeedObject struct {
 	Content   string `json:"content"` // JSON-encoded content
 }
 
-func NewDB(path string) (*DB, error) {
-	log.Printf("Opening database at path: %s", path)
-	db, err := sql.Open("sqlite3", path)
-	if err != nil {
-		log.Printf("Error opening database: %v", err)
-		return nil, err
-	}
+func NewDB(conn *sql.DB) (*DB, error) {
+	db := &DB{conn: conn}
 
 	query := `CREATE TABLE IF NOT EXISTS feeds (
 		txid TEXT PRIMARY KEY,
 		subnetID TEXT,
 		chainID TEXT,
 		address TEXT,
-		timestamp INTEGER,
-		fee INTEGER,
+		timestamp BIGINT,
+		fee BIGINT,
 		content TEXT
 	)`
-	_, err = db.Exec(query)
+	_, err := db.conn.Exec(query)
 	if err != nil {
 		log.Printf("Error creating table: %v", err)
 		return nil, err
 	}
 
 	log.Println("Database initialized successfully")
-	return &DB{conn: db}, nil
+	return db, nil
 }
 
 func (db *DB) SaveFeed(feed *FeedObject) error {
 	log.Printf("Saving feed with TxID: %s", feed.TxID)
-	query := `INSERT INTO feeds (txid, subnetID, chainID, address, timestamp, fee, content) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO feeds (txid, subnetID, chainID, address, timestamp, fee, content) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 	_, err := db.conn.Exec(query, feed.TxID, feed.SubnetID, feed.ChainID, feed.Address, feed.Timestamp, feed.Fee, feed.Content)
 	if err != nil {
 		log.Printf("Error saving feed: %v", err)
@@ -60,7 +55,7 @@ func (db *DB) SaveFeed(feed *FeedObject) error {
 
 func (db *DB) GetFeed(txID string) (*FeedObject, error) {
 	var feed FeedObject
-	query := `SELECT txid, subnetID, chainID, address, timestamp, fee, content FROM feeds WHERE txid = ?`
+	query := `SELECT txid, subnetID, chainID, address, timestamp, fee, content FROM feeds WHERE txid = $1`
 	row := db.conn.QueryRow(query, txID)
 	err := row.Scan(&feed.TxID, &feed.SubnetID, &feed.ChainID, &feed.Address, &feed.Timestamp, &feed.Fee, &feed.Content)
 	if err != nil {
@@ -103,7 +98,7 @@ func (db *DB) GetAllFeeds() ([]FeedObject, error) {
 
 func (db *DB) GetFeedsByUser(address string) ([]FeedObject, error) {
 	var feeds []FeedObject
-	query := `SELECT txid, subnetID, chainID, address, timestamp, fee, content FROM feeds WHERE address = ?`
+	query := `SELECT txid, subnetID, chainID, address, timestamp, fee, content FROM feeds WHERE address = $1`
 	rows, err := db.conn.Query(query, address)
 	if err != nil {
 		log.Printf("Error fetching feeds by user: %v", err)
@@ -130,7 +125,7 @@ func (db *DB) GetFeedsByUser(address string) ([]FeedObject, error) {
 
 func (db *DB) GetLastFeeds(limit int) ([]FeedObject, error) {
 	var feeds []FeedObject
-	query := `SELECT txid, subnetID, chainID, address, timestamp, fee, content FROM feeds ORDER BY timestamp DESC LIMIT ?`
+	query := `SELECT txid, subnetID, chainID, address, timestamp, fee, content FROM feeds ORDER BY timestamp DESC LIMIT $1`
 	rows, err := db.conn.Query(query, limit)
 	if err != nil {
 		log.Printf("Error fetching last feeds: %v", err)
