@@ -223,38 +223,44 @@ func (m *Manager) Run(ctx context.Context) error {
 		}
 
 		for i, tx := range blk.Txs {
-			action, ok := tx.Action.(*actions.Transfer)
-			recipientAddr, err := m.config.RecipientAddress()
-			if err != nil {
-				m.log.Error("Failed to get recipient address", zap.Error(err))
-				return err
-			}
-			if !ok || action.To != recipientAddr {
-				continue
-			}
-
 			result := results[i]
-			fromStr := codec.MustAddressBech32(nconsts.HRP, tx.Auth.Actor())
-			if !result.Success || action.Value < m.feeAmount {
-				m.log.Info("Incoming message failed or did not pay enough", zap.String("from", fromStr), zap.String("memo", string(action.Memo)), zap.Uint64("payment", action.Value), zap.Uint64("required", m.feeAmount))
-				continue
-			}
+			if result.Success {
+				for i, act := range tx.Actions {
+					action, ok := act.(*actions.Transfer)
 
-			var content FeedContent
-			if err := json.Unmarshal(action.Memo, &content); err != nil || len(content.Message) == 0 {
-				m.log.Info("Incoming message could not be parsed or was empty", zap.String("from", fromStr), zap.String("memo", string(action.Memo)), zap.Uint64("payment", action.Value), zap.Error(err))
-				continue
-			}
+					recipientAddr, err := m.config.RecipientAddress()
+					if err != nil {
+						m.log.Error("Failed to get recipient address", zap.Error(err))
+						return err
+					}
+					if !ok || action.To != recipientAddr {
+						continue
+					}
 
-			m.appendFeed(&FeedObject{
-				SubnetID:  m.subnetID.String(),
-				ChainID:   m.chainID.String(),
-				Address:   fromStr,
-				TxID:      tx.ID(),
-				Timestamp: blk.Tmstmp,
-				Fee:       action.Value,
-				Content:   &content,
-			})
+					result := results[i]
+					fromStr := codec.MustAddressBech32(nconsts.HRP, tx.Auth.Actor())
+					if !result.Success || action.Value < m.feeAmount {
+						m.log.Info("Incoming message failed or did not pay enough", zap.String("from", fromStr), zap.String("memo", string(action.Memo)), zap.Uint64("payment", action.Value), zap.Uint64("required", m.feeAmount))
+						continue
+					}
+
+					var content FeedContent
+					if err := json.Unmarshal(action.Memo, &content); err != nil || len(content.Message) == 0 {
+						m.log.Info("Incoming message could not be parsed or was empty", zap.String("from", fromStr), zap.String("memo", string(action.Memo)), zap.Uint64("payment", action.Value), zap.Error(err))
+						continue
+					}
+
+					m.appendFeed(&FeedObject{
+						SubnetID:  m.subnetID.String(),
+						ChainID:   m.chainID.String(),
+						Address:   fromStr,
+						TxID:      tx.ID(),
+						Timestamp: blk.Tmstmp,
+						Fee:       action.Value,
+						Content:   &content,
+					})
+				}
+			}
 		}
 
 		time.Sleep(1 * time.Second)
