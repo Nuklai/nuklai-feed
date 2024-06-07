@@ -2,24 +2,16 @@ package rpc
 
 import (
 	"context"
-	"strings"
 
 	"github.com/ava-labs/hypersdk/requester"
 	"github.com/nuklai/nuklai-feed/manager"
-)
-
-const (
-	JSONRPCEndpoint = "/feed"
 )
 
 type JSONRPCClient struct {
 	requester *requester.EndpointRequester
 }
 
-// New creates a new client object.
 func NewJSONRPCClient(uri string) *JSONRPCClient {
-	uri = strings.TrimSuffix(uri, "/")
-	uri += JSONRPCEndpoint
 	req := requester.New(uri, "feed")
 	return &JSONRPCClient{
 		requester: req,
@@ -52,7 +44,6 @@ func (cli *JSONRPCClient) Feed(ctx context.Context, subnetID, chainID string, li
 	return resp.Feed, err
 }
 
-// UpdateNuklaiRPC updates the RPC url for Nuklai
 func (cli *JSONRPCClient) UpdateNuklaiRPC(ctx context.Context, newNuklaiRPCUrl, adminToken string) (bool, error) {
 	resp := new(UpdateNuklaiRPCReply)
 	err := cli.requester.SendRequest(
