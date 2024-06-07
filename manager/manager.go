@@ -225,7 +225,7 @@ func (m *Manager) Run(ctx context.Context) error {
 		for i, tx := range blk.Txs {
 			result := results[i]
 			if result.Success {
-				for i, act := range tx.Actions {
+				for _, act := range tx.Actions {
 					action, ok := act.(*actions.Transfer)
 
 					recipientAddr, err := m.config.RecipientAddress()
@@ -237,7 +237,6 @@ func (m *Manager) Run(ctx context.Context) error {
 						continue
 					}
 
-					result := results[i]
 					fromStr := codec.MustAddressBech32(nconsts.HRP, tx.Auth.Actor())
 					if !result.Success || action.Value < m.feeAmount {
 						m.log.Info("Incoming message failed or did not pay enough", zap.String("from", fromStr), zap.String("memo", string(action.Memo)), zap.Uint64("payment", action.Value), zap.Uint64("required", m.feeAmount))
